@@ -290,23 +290,120 @@ export function handleUrlNoDecode() {
 
 
 // 屏幕适配,设置rem的值
-// rem(document, window);
-export function setRemValue(doc, win) {
-  // 分辨率Resolution适配
-  var docEl = doc.documentElement,
-      resizeEvt = 'orientationchange' in window ? 'orientationchange' : 'resize',
-      recalc = function () {
-          var clientWidth = docEl.clientWidth;
-          if (!clientWidth) return;
-          docEl.style.fontSize = clientWidth / 37.5 + 'px';
-      };
-  // Abort if browser does not support addEventListener
-  if (!doc.addEventListener) return;
-  win.addEventListener(resizeEvt, recalc, false);
-  win.addEventListener('pageshow', recalc, false);
-  doc.addEventListener('DOMContentLoaded', recalc, false);
+export function setRemValue() {
+
+  const docEl = document.documentElement
+  const metaEl = document.querySelector('meta[name="viewport"]')
+
+  const maxWidth = window.__MAX_WIDTH__ || 750
+  const divPart = window.__DIV_PART__ || 37.5
+  const bodySize = window.__BODY_SIZE__ || 12
+
+  let scale = 1
+  let dpr = 1
+  let timer = null
+
+  if (metaEl) {
+  
+    const match = metaEl.getAttribute('content').match(/initial-scale=([\d.]+)/)
+  
+    if (match) {
+      scale = parseFloat(match[1])
+      dpr = parseInt(1 / scale)
+    }
+  } else {
+    if (window.navigator.appVersion.match(/iphone/gi)) {
+      dpr = parseInt(window.devicePixelRatio) || 1
+      scale = 1 / dpr
+    }
+    const newMetaEl = document.createElement('meta')
+    newMetaEl.setAttribute('name', 'viewport')
+    newMetaEl.setAttribute('content', `width=device-width, initial-scale=${scale}, maximum-scale=${scale}, minimum-scale=${scale}, user-scalable=no`)
+    docEl.firstElementChild.appendChild(newMetaEl)
+  }
+  
+  // 设置根节点dpr
+  docEl.setAttribute('data-dpr', dpr);
+  function bodyLoaded (cb) {
+    if (document.body) {
+      cb && cb()
+    } else {
+      document.addEventListener('DOMContentLoaded', function () {
+        cb && cb()
+      }, false)
+    }
+  }
+
+  function refreshRem () {
+    let width = docEl.clientWidth
+  
+    if (width / dpr > maxWidth) {
+      width = maxWidth * dpr
+    }
+  
+    // 设置根节点font-size
+    window.remUnit = width / divPart;
+    docEl.style.fontSize = window.remUnit + 'px';
+  
+    bodyLoaded(() => {
+      // 测试rem的准确性，如果和预期不一样，则进行缩放
+      let noEl = document.createElement('div')
+      noEl.style.width = '1rem'
+      noEl.style.height = '0'
+      document.body.appendChild(noEl);
+
+      // div 的可视宽度 除以根元素的字体大小，超多了0.01，重置样式
+      // 兼容1像素在部分手机上显示异常的问题
+      // 兼容图片模糊问题
+      let rate = noEl.clientWidth / window.remUnit;
+      if (Math.abs(rate - 1) >= 0.01) {
+        docEl.style.fontSize = (window.remUnit / rate) + 'px'
+      }
+      // 移除测试的div元素
+      document.body.removeChild(noEl);
+    })
+  }
+
+  // 兼容orientationchange事件
+  const resizeEvt = 'orientationchange' in window ? 'orientationchange' : 'resize';
+  // 如果已经监听了事件，不在重复绑定事件
+  if (!document.addEventListener) return;
+  // 监听orientationchange和resize事件
+  window.addEventListener(resizeEvt, () => {
+    clearTimeout(timer)
+    timer = setTimeout(refreshRem, 200)
+  } , false);
+  // 监听页面唤醒事件
+  window.addEventListener('pageshow', () => {
+    clearTimeout(timer)
+    timer = setTimeout(refreshRem, 200)
+  }, false);
+  // 监听DOM解析完成事件
+  document.addEventListener('DOMContentLoaded', () => {
+    clearTimeout(timer)
+    timer = setTimeout(refreshRem, 200)
+  }, false);
 }
 
+
+export function px2rem (d) {
+  let val = parseFloat(d) / window.remUnit
+
+  if (typeof d === 'string' && d.match(/px$/)) {
+    val += 'rem'
+  }
+  return val
+}
+
+export function rem2px (d) {
+  let val = parseFloat(d) * window.remUnit
+
+  if (typeof d === 'string' && d.match(/rem$/)) {
+    val += 'px'
+  }
+
+  return val
+}
 
 // 获取rem的值
 export function getRemValue(){
